@@ -20,47 +20,85 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: 1. Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
-      - name: Setup Java JDK 21
+      - name: 2. Install dependencies
+        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+
+      - name: 3. Build Web Application
+        run: npm run build
+
+      - name: 4. Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
           cache: 'gradle'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: 5. Setup Android SDK
+        run: |
+          set -e
+          echo "=== Setting up Android SDK Environment ==="
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
 
-      - name: Install Node dependencies
-        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+          # Detect sdkmanager location
+          SDKMANAGER=""
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+            echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          elif [ -x "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
+            echo "$ANDROID_HOME/cmdline-tools/16.0/bin" >> $GITHUB_PATH
+          else
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f -executable 2>/dev/null | head -n 1)"
+            if [ -n "$SDKMANAGER" ]; then
+              echo "$(dirname "$SDKMANAGER")" >> $GITHUB_PATH
+            fi
+          fi
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
 
-      - name: Build Web Application
-        run: npm run build
+          echo "Using sdkmanager: $SDKMANAGER"
 
-      - name: Sync Capacitor to Android
+          # Accept Android SDK licenses to prevent LicenceNotAcceptedException
+          echo "Accepting Android SDK licenses..."
+          mkdir -p "$ANDROID_HOME/licenses"
+          echo -e "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\nd56f5187479451eabf01fb78af6dfcb131a6481e\n8933bad161af4178b1185d1a37fbf41ea5269c55" > "$ANDROID_HOME/licenses/android-sdk-license"
+          echo -e "\n84831b9409646a256e607b76ae8e3d02b88481c3\n504667f4c0de7af1a06de9f4b1727b84351f2910" > "$ANDROID_HOME/licenses/android-sdk-preview-license"
+
+          if [ -n "$SDKMANAGER" ] && [ -x "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses || true
+            echo "Installing required SDK packages without deprecated tools..."
+            "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;35.0.0" || \
+            "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0" || true
+          fi
+
+      - name: 6. Sync Capacitor
         run: npx cap sync android
 
-      - name: Make Gradlew Executable
+      - name: 7. Make Gradle executable
         run: chmod +x android/gradlew
 
-      - name: Build Android Debug APK
+      - name: 8. Build Android Debug APK
         run: |
           cd android
           ./gradlew assembleDebug --stacktrace
 
-      - name: Verify Generated APK
+      - name: 9. Verify the APK actually exists
         run: |
-          echo "=== Built APK Location ==="
+          echo "=== Verifying Generated APK ==="
           ls -lh android/app/build/outputs/apk/debug/
-          test -f android/app/build/outputs/apk/debug/app-debug.apk && echo "APK successfully verified!"
+          test -f android/app/build/outputs/apk/debug/app-debug.apk
+          echo "SUCCESS: Found app-debug.apk at android/app/build/outputs/apk/debug/app-debug.apk"
 
-      - name: Upload SHREYA APK Artifact
+      - name: 10. Upload the REAL APK as a GitHub Actions artifact
         uses: actions/upload-artifact@v4
         with:
           name: SHREYA-debug-apk
