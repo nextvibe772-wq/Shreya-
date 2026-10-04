@@ -1,0 +1,8 @@
+{
+  "name": "SHREYA - Personal AI Voice Assistant",
+  "description": "Advanced personal AI voice assistant with multi-provider AI, voice conversation, Google Sheets integration, and smart device skills.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

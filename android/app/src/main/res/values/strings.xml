@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SHREYA</string>
+    <string name="title_activity_main">SHREYA</string>
+    <string name="package_name">ai.shreya.assistant</string>
+    <string name="custom_url_scheme">ai.shreya.assistant</string>
+</resources>
